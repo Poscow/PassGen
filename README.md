@@ -1,6 +1,6 @@
--PassGen- A Simple and Local Password Manager
+-PassGen- A Simple and Local Password Manager - Created by @Poscow
+# <img src="assets/logo.png" width="600"> 
 
--Created by p0sco-
 
 ## Features
 -Generate strong passwords
