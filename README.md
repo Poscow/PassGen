@@ -43,3 +43,4 @@ furnished to do so, subject to the following conditions:
 - I'm now just getting used to working with AES-128 encryption and I'm still learning about it.
 
 - My python maybe messy and wack, please give me any feedback you can.
+- ps the Logo has two circles point to EE (Encryption Enabled) :)
