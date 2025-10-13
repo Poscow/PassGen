@@ -10,9 +10,8 @@ https://github.com/p0sco/PassGen
 -Password saving
 -Password backups
 ###########################
-
 """
-#Standard library import
+
 import os
 import base64
 import random
@@ -22,238 +21,320 @@ from pathlib import Path
 from getpass import getpass
 from datetime import datetime
 
-#Cryptography imports
+
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 
-def is_encrypted():
-    #Check if passwords.txt is encrpyted
-    if not Path("passwords.txt").exists():
-        return False
-    try:
-        with open("passwords.txt", "rb") as f:
-            content = f.read()
-            return content.startswith(b'gAAAA')
-    except:
-        return False
+BASE_DIR = Path(__file__).parent.resolve()
 
-def main():
-    print("Passgen\n")
-    
-    while True:
-        print("\nMenu:\n")
-        print("1. Generate new password")
-        print("2. Encrypt passwords")
-        print("3. Decrypt passwords")
-        print("4. View passwords")
-        print("5. Backup passwords")
-        print("6. Exit")
-        
 
-        choice = input("\nYour choice: ")
-        
-        if choice == "1":
-            if is_encrypted():
-                print("\nCannot generate password - file is currently encrypted!")
-                print("Please decrypt the file first (Option 3)")
-            else:
-                password = generate_password()
-                save_password(password)
-        elif choice == "2":
-            encrypt_file()
-        elif choice == "3":
-            decrypt_file()
-        elif choice == "4":
-            view_passwords()
-        elif choice == "5":
-            backup_passwords()
-        elif choice == "6":
-            break
-        else:
-            print("Please enter 1-5")
+class PasswordManager:
+    def __init__(self, filename="passwords.txt"):
+        self.filename = BASE_DIR / filename
 
-def generate_password():
-    #password length
-    while True:
+    def is_encrypted(self):
+        """Check if the main password file is already encrypted"""
+        if not self.filename.exists():
+            return False
         try:
-            length = int(input("\nPassword length (8-32): "))
-            if 8 <= length <= 32:
-                break
-            print("Please enter between 8 and 32")
+            with open(self.filename, "rb") as f:
+                return f.read().startswith(b"gAAAA")
         except:
-            print("Please enter a number")
-    
-    #generate password
-    chars = string.ascii_letters + string.digits + "!@#$%^&*"
-    password = [
-        random.choice(string.ascii_lowercase),
-        random.choice(string.ascii_uppercase),
-        random.choice(string.digits),
-        random.choice("!@#$%^&*")
-    ]
-    
-    #Fill the rest
-    password.extend(random.choice(chars) for _ in range(length - 4))
-    random.shuffle(password)
-    password = ''.join(password)
-    
-    #Display password
-    print(f"Your new password: {password}")
-    
-    return password
+            return False
 
-def save_password(password):
-    while True:
-        save = input("\nSave this password to passwords.txt? (y/n): ").lower()
-        if save in ['y', 'n']:
-            break
-        print("\nEnter y or n")
-    
-    if save == 'y':
-        #Account name
-        account = input("What account is this password for:  ").strip()
-        
-        #Save to file
-        with open("passwords.txt", "a") as f:
-            f.write(f"{account}: {password}\n")
-        
-        print(f"\nPassword for {account} has saved sucessfully")
+    def generate_password(self):
+        while True:
+            try:
+                length = int(input("\nPassword length (8-32): "))
+                if 8 <= length <= 32:
+                    break
+                print("Please enter between 8 and 32")
+            except:
+                print("Please enter a number")
 
-def encrypt_file():
-    if not Path("passwords.txt").exists():
-        print("\nNo passwords file to encrypt")
-        return
-    
-    print("\nChoose encryption method:")
-    print("1. Generate new key")
-    print("2. Use your own password")
-    print("3. Use existing key")
-    
-    choice = input("Enter 1, 2, or 3 ")
-    
-    key = None
-    
-    if choice == "1":
-        #Generate fernet key
-        key = Fernet.generate_key()
-        with open("key.key", "wb") as key_file:
-            key_file.write(key)
-        print("\nGenerated new encryption key")
-    elif choice == "2":
-        #Convert password to key
-        password = getpass("\nEnter your encryption password: ").encode()
-        key = base64.urlsafe_b64encode(hashlib.sha256(password).digest())
-        with open("key.key", "wb") as key_file:
-            key_file.write(key)
-        print("\nUsing your custom password as key")
-    elif choice == "3":
-        if not Path("key.key").exists():
-            print("\nNo existing key found")
+        chars = string.ascii_letters + string.digits + "!@#$%^&*"
+        password = [
+            random.choice(string.ascii_lowercase),
+            random.choice(string.ascii_uppercase),
+            random.choice(string.digits),
+            random.choice("!@#$%^&*")
+        ]
+        password.extend(random.choice(chars) for _ in range(length - 4))
+        random.shuffle(password)
+        password = ''.join(password)
+        print(f"Your new password: {password}")
+        return password
+
+    def save_password(self, password):
+        while True:
+            save = input("\nSave this password to passwords.txt? (y/n): ").lower()
+            if save in ['y', 'n']:
+                break
+            print("\nEnter y or n")
+
+        if save == 'y':
+            account = input("What account is this password for:  ").strip()
+            with open(self.filename, "a") as f:
+                f.write(f"{account}: {password}\n")
+            print(f"\nPassword for {account} has saved successfully")
+
+    def _derive_key(self, password: str):
+        """Derive a Fernet key from a password."""
+        password_bytes = password.encode()
+        key = base64.urlsafe_b64encode(hashlib.sha256(password_bytes).digest())
+        return Fernet(key)
+
+    def encrypt_file(self):
+        if not self.filename.exists():
+            print("\nNo passwords file to encrypt")
             return
-        with open("key.key", "rb") as key_file:
-            key = key_file.read()
-        print("\nUsing existing encryption key")
-    else:
-        print("Invalid choice")
-        return
-    
-    #encrypt the file
-    with open("passwords.txt", "rb") as file:
-        original = file.read()
-    
-    fernet = Fernet(key)
-    encrypted = fernet.encrypt(original)
-    
-    with open("passwords.txt", "wb") as encrypted_file:
-        encrypted_file.write(encrypted)
-    
-    print("\nPasswords encrypted successfully!")
 
-def decrypt_file():
-    if not Path("passwords.txt").exists():
-        print("\nNo passwords file to decrypt")
-        return
-    
-    print("\nChoose decryption method:")
-    print("1. Use key from file")
-    print("2. Enter password manually")
-    
-    method = input("Enter 1 or 2: ")
-    
-    key = None
-    if method == "1":
-        if not Path("key.key").exists():
-            print("\nNo key file found")
+        if self.is_encrypted():
+            print("\nFile is already encrypted. Cannot encrypt again. ")
             return
-        with open("key.key", "rb") as key_file:
-            key = key_file.read()
-    elif method == "2":
-        password = getpass("\nEnter your decryption password: ").encode()
-        key = base64.urlsafe_b64encode(hashlib.sha256(password).digest())
-    else:
-        print("Invalid choice")
-        return
-    
-    try:
-        #Decrypt the file
-        with open("passwords.txt", "rb") as file:
-            encrypted = file.read()
-        
-        fernet = Fernet(key)
-        decrypted = fernet.decrypt(encrypted)
-        
-        with open("passwords.txt", "wb") as decrypted_file:
-            decrypted_file.write(decrypted)
-        
-        print("\nPasswords decrypted successfully")
-    except:
-        print("\nFailed to decrypt, wrong key or corrupted file")
 
-def view_passwords():
-    file = Path("passwords.txt")
-    if file.exists():
-        print("\nSaved Passwords: ")
-        print("═" * 50)
-        with open("passwords.txt", "r") as f:
-            print(f.read())
-        print("═" * 50)
-    else:
-        print("\nNo passwords found\n")
+        password = input("\nEnter a password to encrypt your file: ")
+        confirm = getpass("Confirm password: ")
+        if password != confirm:
+            print("\nPasswords do not match. Encryption canceled.")
+            return
 
-def backup_passwords():
-    #Timestamp copy
-    if not Path("passwords.txt").exists():
-        print("\nNo passwords file to backup")
-        return
-    
-    timestamp = datetime.now().strftime("%Y-%m%d_$H%M%S")
-    backup_file = f"passwords_backup_{timestamp}.txt"
+        fernet = self._derive_key(confirm)
+        with open(self.filename, "rb") as file:
+            original = file.read()
+        encrypted = fernet.encrypt(original)
+        with open(self.filename, "wb") as encrypted_file:
+            encrypted_file.write(encrypted)
+        print("\nPasswords encrypted successfully!")
 
-    try:
-        #Check if file is encrypted
-        with open("passwords.txt", "rb") as original:
-            content = original.read()
-            if content.startswith(b'gAAAA'):
-                print("\nFile is encrypted, decrypt first")
+    def decrypt_file(self):
+        if not self.filename.exists():
+            print("\nNo passwords file to decrypt")
+            return
+
+        if not self.is_encrypted():
+            print("\nFile is not encrypted! Nothing to decrypt.")
+            return
+
+        password = getpass("\nEnter your decryption password: ")
+        fernet = self._derive_key(password)
+
+        try:
+            with open(self.filename, "rb") as file:
+                encrypted = file.read()
+            decrypted = fernet.decrypt(encrypted)
+            with open(self.filename, "wb") as decrypted_file:
+                decrypted_file.write(decrypted)
+            print("\nPasswords decrypted successfully")
+        except:
+            print("\nFailed to decrypt. Wrong password or corrupted file.")
+
+    def view_passwords(self):
+        if self.filename.exists():
+            print("\nSaved Passwords: ")
+            print("â" * 50)
+            with open(self.filename, "r") as f:
+                print(f.read())
+            print("â" * 50)
+        else:
+            print("\nNo passwords found\n")
+
+    def backup_passwords(self):
+        if not self.filename.exists():
+            print("\nNo passwords file to backup")
+            return
+
+        today = datetime.now().strftime('%Y-%m-%d')
+        existing_backups = sorted(BASE_DIR.glob(f"*-Password_Backup({today}).txt"))
+
+        # Read current password file content
+        with open(self.filename, "r") as f:
+            current_content = f.read()
+
+        # Check if identical backup already exists
+        for backup in existing_backups:
+            with open(backup, "r") as bf:
+                if bf.read() == current_content:
+                    print("\nBackup already exists for the current file.")
+                    return
+
+        # Determine the next index by parsing existing filenames
+        indices = []
+        for backup in existing_backups:
+            try:
+                index = int(backup.name.split("-")[0])
+                indices.append(index)
+            except:
+                continue
+        next_index = max(indices, default=0) + 1
+
+        backup_file = BASE_DIR / f"{next_index}-Password_Backup({today}).txt"
+
+        try:
+            with open(self.filename, "r") as original, open(backup_file, "w") as backup:
+                backup.write(original.read())
+            print(f"\nBackup saved as {backup_file.name}")
+        except Exception as e:
+            print(f"\nFailed to backup: {str(e)}")
+
+
+class BackupManager:
+    def __init__(self, pm: PasswordManager):
+        self.pm = pm
+
+    def is_backup_encrypted(self, file_path):
+        """Check if a backup is encrypted"""
+        try:
+            with open(file_path, "rb") as f:
+                return f.read().startswith(b"gAAAA")
+        except:
+            return False
+
+    def encrypt_backups(self):
+        #List backups
+        backups = sorted(BASE_DIR.glob("*-Password_Backup(*).txt"))
+        if not backups:
+            print("\nNo backups found")
+            return
+
+        print("\nAvailable backups:")
+        for i, backup in enumerate(backups, 1):
+            print(f"{i} - {backup.name}")
+
+        #Get user choice
+        choice = input("\nEnter backup number to encrypt or 'all' for all: ").strip().lower()
+        if choice == "all":
+            selected_backups = backups
+        else:
+            try:
+                index = int(choice) - 1
+                selected_backups = [backups[index]]
+            except:
+                print("\nInvalid selection")
                 return
-        
-        #Copy file
-        with open("passwords.txt", "r") as original, open(backup_file, "w") as backup:
-            backup.write(original.read())
 
-        print(f"\nBackup saved as {backup_file}")
-    except Exception as e:
-        print(f"\nfailed to backup: {str(e)}")
+        already_encrypted = [b for b in selected_backups if self.is_backup_encrypted(b)]
+        if already_encrypted:
+            for b in already_encrypted:
+                print(f"{b.name} is already encrypted, skipping encryption.")
+            selected_backups = [b for b in selected_backups if not self.is_backup_encrypted(b)]
+            if not selected_backups:
+                print("\nNo backups left to encrypt. Skipping")
+                return
+            
+
+        #Get Password
+        password = input("\nEnter password to encrypt selected backups: ")
+        confirm = getpass("\nConfirm password: ")
+        if password != confirm:
+            print("\nPasswords do not match. Encryption canceled.")
+            return
+
+        fernet = self.pm._derive_key(confirm)
+
+        for backup in selected_backups:
+            if self.is_backup_encrypted(backup):
+                print(f"{backup.name} is already encrypted, skipping.")
+                continue
+            with open(backup, "rb") as file:
+                data = file.read()
+            encrypted = fernet.encrypt(data)
+            with open(backup, "wb") as file:
+                file.write(encrypted)
+
+        print("\nSelected backups encrypted successfully")
+
+    def decrypt_backups(self):
+        backups = sorted(BASE_DIR.glob("*-Password_Backup(*).txt"))
+        if not backups:
+            print("\nNo backups found")
+            return
+
+        #Backup numbered list
+        print("\nAvailable backups:")
+        for i, backup in enumerate(backups, 1):
+            print(f"{i} - {backup.name}")
+
+        #Ask for which backup
+        choice = input("\nEnter backup number to decrypt or 'all' for all: ").strip().lower()
+        if choice == "all":
+            selected_backups = backups
+        else:
+            try:
+                index = int(choice) - 1
+                if index < 0 or index >= len(backups):
+                    print("\nInvalid selection")
+                    return
+                selected_backups = [backups[index]]
+            except:
+                print("\nInvalid selection")
+                return
+
+        #Get Password 
+        password = getpass("\nEnter password to decrypt backups: ")
+        fernet = self.pm._derive_key(password)
+
+        for backup in selected_backups:
+            if not self.is_backup_encrypted(backup):
+                print(f"{backup.name} is not encrypted, skipping.")
+                continue
+            try:
+                with open(backup, "rb") as file:
+                    data = file.read()
+                decrypted = fernet.decrypt(data)
+                with open(backup, "wb") as file:
+                    file.write(decrypted)
+                print(f"Decrypted {backup.name} successfully")
+            except:
+                print(f"\nFailed to decrypt {backup.name} (wrong password or corrupted file)")
+
+        print("\nSelected backup(s) decryption completed.")
 
 
-"""
--TODO-
-    -Add password strength checker
-    -Availability to decrypt backups
-    -Class
-    -Settings
-"""
+class PassGen:
+    def __init__(self):
+        self.pm = PasswordManager()
+        self.bm = BackupManager(self.pm)
+
+    def menu(self):
+        print("Passgen\n")
+        while True:
+            print("\nMenu:\n")
+            print("1. Generate new password")
+            print("2. Encrypt passwords")
+            print("3. Decrypt passwords")
+            print("4. View passwords")
+            print("5. Backup passwords")
+            print("6. Encrypt backups")
+            print("7. Decrypt backups")
+            print("8. Exit")
+
+            choice = input("\nYour choice: ")
+            if choice == "1":
+                if self.pm.is_encrypted():
+                    print("\nCannot generate password - file is currently encrypted!")
+                    print("Please decrypt the file first (Option 3)")
+                else:
+                    password = self.pm.generate_password()
+                    self.pm.save_password(password)
+            elif choice == "2":
+                self.pm.encrypt_file()
+            elif choice == "3":
+                self.pm.decrypt_file()
+            elif choice == "4":
+                self.pm.view_passwords()
+            elif choice == "5":
+                self.pm.backup_passwords()
+            elif choice == "6":
+                self.bm.encrypt_backups()
+            elif choice == "7":
+                self.bm.decrypt_backups()
+            elif choice == "8":
+                break
+            else:
+                print("Invalid Option, Please enter 1-8")
+
+
 if __name__ == "__main__":
-    main()
+    app = PassGen()
+    app.menu()
