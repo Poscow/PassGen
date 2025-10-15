@@ -166,7 +166,7 @@ class PasswordManager:
                 indices.append(index)
             except:
                 continue
-        next_index = max(indices, default=0) + 1
+        next_index = max(indices, default=1) + 1
 
         backup_file = BASE_DIR / f"{next_index}-Password_Backup({today}).txt"
 
